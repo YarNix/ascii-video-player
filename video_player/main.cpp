@@ -37,20 +37,19 @@ void init_args(int argc, char const **argv, std::pair<int, const char *> *table,
     if (argc == 3)
     {
         int size = atoi(argv[2]);
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i <= 4; i++)
         {
+            if (i == 4){
+                printf("error: Unknow size of sample_size.\nAvailable size: ");
+                for (int i = 0; i < 4; i++)
+                    printf("%d%c", ASCII_TABLES[i].first, (i != 3) ? ',' : '\n');
+                exit(EXIT_FAILURE);
+            }
             if (size == ASCII_TABLES[i].first)
             {
                 *table = ASCII_TABLES[i];
                 break;
             }
-        }
-        if (!table)
-        {
-            printf("error: Unknow size of sample_type.\nAvailable size: ");
-            for (int i = 0; i < 4; i++)
-                printf("%d%c", ASCII_TABLES[i].first, (i != 3) ? ',' : '\n');
-            exit(EXIT_FAILURE);
         }
     }
     else
