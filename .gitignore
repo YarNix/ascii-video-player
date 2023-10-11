@@ -6,9 +6,6 @@
 # User-specific files
 *.userprefs
 
-# Mono Auto Generated Files
-mono_crash.*
-
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
@@ -39,16 +36,8 @@ $RECYCLE.BIN/
 .idea/vim.xml
 .idea/gradle.xml
 
-# User-specific files
-*.suo
-*.user
-*.sln.docstates
-
-# User-specific files
-*.userprefs
-
 # Built binaries
-/build/*
+[Bb][uU][iI][lL][dD]/*
 *.exe
 *.lib
 *.def
@@ -56,4 +45,3 @@ $RECYCLE.BIN/
 *.o
 *.a
 
-/dependencies
