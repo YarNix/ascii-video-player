@@ -1,5 +1,6 @@
 extern "C"
 {
+#include <unistd.h>
 #include <stdio.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -9,6 +10,7 @@ extern "C"
 #include "asciiPlayer.hpp"
 #include <chrono>
 #include <thread>
+extern const char* TABLE_SIZES_MSG;
 
 using namespace std::chrono;
 
@@ -26,36 +28,74 @@ inline void try_exit(bool condition, int exit_code)
     if (condition)
         try_exit(exit_code);
 }
-void init_args(int argc, char const **argv, std::pair<int, const char *> *table, const char **media_file)
+void init_args(int argc, char const **argv, const char* &media_file, std::pair<int, const char*> &table, int& fntSize)
 {
-    if (argc != 2 && argc != 3)
+    if (argc == 1) goto lbUsage;
+    int opt;
+    while ((opt = getopt(argc, (char*const*)argv, "hc:f:")) != -1) // 
     {
-        printf("usage: %s <media_file> [sample_size]\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    *media_file = argv[1];
-    if (argc == 3)
-    {
-        int size = atoi(argv[2]);
-        for (int i = 0; i <= 4; i++)
+        int size;
+        const char* wStr; char* hStr;
+        switch (opt)
         {
-            if (i == 4){
-                printf("error: Unknow size of sample_size.\nAvailable size: ");
-                for (int i = 0; i < 4; i++)
-                    printf("%d%c", ASCII_TABLES[i].first, (i != 3) ? ',' : '\n');
-                exit(EXIT_FAILURE);
-            }
-            if (size == ASCII_TABLES[i].first)
-            {
-                *table = ASCII_TABLES[i];
+        case 'c': // character set
+            size = atoi(optarg);
+            if(size == 0){
+                // No int conversion, maybe custom?
+                int len = strlen(optarg);
+                const char* custom;
+                // Ensure {{ CHARACTERS }} format
+                if (optarg[0] != '{' || optarg[1] != '{' ||
+                    optarg[len - 2] != '}' || optarg[len - 1] != '}')
+                    goto lbBadChar;
+                // Is custom set
+                optarg[len - 2] = '\0';
+                table = {len, optarg + 2};
                 break;
             }
+            for (int i = 0; i <= 4; i++)
+            {
+                if (i == 4) goto lbBadChar;
+                if (size == ASCII_TABLES[i].first)
+                {
+                    table = ASCII_TABLES[i];
+                    break;
+                }
+            }
+            break;
+        case 'f': // font size
+            fntSize = atoi(optarg);
+            if (fntSize <= 0) goto lbBadScale;
+            break;
+        case '?':
+            exit(EXIT_FAILURE);
+        default:
+        case 'h': // help
+            goto lbUsage;
         }
     }
-    else
-    {
-        *table = ASCII_TABLES[1]; // 14
-    }
+    if (optind >= argc) goto lbBadLastArg;
+    media_file = argv[optind];
+    return;
+    lbUsage:
+    printf( "usage: %s [options...] <media_file>\n"
+            "   -h\tPrint this message\n"
+            "   -c\tSet the characters to use when converting\n"
+            "     \tAvailable: %s or define your own using {{}}\n"
+            "     \tdefault is 14 or {{ .:-=;+?*E#0%@}}\n"
+            "   -f\tChange the console's fontSize\n"
+            "     \tthe program will guess the smallest size if not set\n"
+            , argv[0], TABLE_SIZES_MSG);
+    exit(EXIT_SUCCESS);
+    lbBadLastArg:
+    printf("error: Missing media, no file path supplied");
+    exit(EXIT_FAILURE);
+    lbBadChar:
+    printf("error: Invalid character set: \"%s\"\n%s\n", optarg, TABLE_SIZES_MSG);
+    exit(EXIT_FAILURE);
+    lbBadScale:
+    printf("error: Invalid size value: %s\n", optarg);
+    exit(EXIT_FAILURE);
 }
 void init_fmt_cxt(const char *filename, AVFormatContext **format)
 {
@@ -114,8 +154,8 @@ void decode_to_grayscale(AsciiDisplay *display, AVFormatContext *format, AVCodec
     int outW, outH;
     uint8_t *outBuffer[4] = {};
     int outPlane[4] = {};
-    outW = display->getScreenWidth();
-    outH = display->getScreenHeight();
+    outW = display->getBufferWidth();
+    outH = display->getBufferHeight();
     try_exit(av_image_alloc(outBuffer, outPlane, outW, outH, AV_PIX_FMT_GRAYF32, 4) < 0, AVERROR(ENOMEM));
 
     SwsContext *converter = NULL;
@@ -165,9 +205,11 @@ void decode_to_grayscale(AsciiDisplay *display, AVFormatContext *format, AVCodec
 
 int main(int argc, char const **argv)
 {
-    std::pair<int, const char *> table;
     const char *media_file = NULL;
-    init_args(argc, argv, &table, &media_file);
+    // Setting default argument
+    std::pair<int, const char *> table = ASCII_TABLES[1];
+    int fntSize = 0;
+    init_args(argc, argv, media_file, table, fntSize);
 
     AVFormatContext *fmt_context = NULL;
     AVStream *video_stream = NULL;
@@ -179,7 +221,7 @@ int main(int argc, char const **argv)
     video_index = init_stream(&video_stream, &decoder, fmt_context, AVMEDIA_TYPE_VIDEO);
     init_codec_cxt(&codec_context, decoder, video_stream->codecpar);
 
-    AsciiDisplay as_display(codec_context->width, codec_context->height, &table, media_file);
+    AsciiDisplay as_display(codec_context->width, codec_context->height, media_file, table, fntSize);
     decode_to_grayscale(&as_display, fmt_context, codec_context, video_index);
 
     avcodec_close(codec_context);
